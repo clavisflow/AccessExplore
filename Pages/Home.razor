@@ -25,7 +25,7 @@
             <div>
                 <label class="upload-label" for="accessFile">Access ファイルを選択またはドロップ</label>
                 <p>.accdb / .mdb 対応。最大 300MB。</p>
-                <p>ファイルはサーバーに送信されず、すべての解析をブラウザ上で安全に行います。</p>
+                <p>🔒ファイルはサーバーに送信されず、すべての解析をブラウザ上で安全に行います。</p>
             </div>
         </div>
         <InputFile id="accessFile" class="@FileInputClass()" OnChange="AnalyzeFileAsync" accept=".accdb,.mdb" />
@@ -330,6 +330,11 @@
             }
         </section>
     }
+
+
+    <footer class="site-footer">
+        Built with C#, Blazor WebAssembly and Azure Static Web Apps.
+    </footer>
 </section>
 
 @code {
