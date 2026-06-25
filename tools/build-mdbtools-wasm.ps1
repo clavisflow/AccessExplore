@@ -17,6 +17,25 @@ if (-not (Test-Path $sourcePath)) {
     git -c core.autocrlf=false clone --depth 1 $MdbToolsRepository $sourcePath
 }
 
+$mdbJsonPath = Join-Path $sourcePath "src\util\mdb-json.c"
+$mdbJsonSource = Get-Content -Raw $mdbJsonPath
+if ($mdbJsonSource -notmatch 'G_OPTION_ARG_INT,\s*&row_limit') {
+    $mdbJsonSource = $mdbJsonSource.Replace(
+        "	int print_mdbver = 0;",
+        "	int print_mdbver = 0;`n	gint row_limit = 0;")
+
+    $mdbJsonSource = $mdbJsonSource.Replace(
+        '		{"no-unprintable", ''U'', 0, G_OPTION_ARG_NONE, &drop_nonascii, "Change unprintable characters to spaces (otherwise escaped as \\u00XX)", NULL},',
+        '		{"no-unprintable", ''U'', 0, G_OPTION_ARG_NONE, &drop_nonascii, "Change unprintable characters to spaces (otherwise escaped as \\u00XX)", NULL},' + "`n" +
+        '		{"limit", ''l'', 0, G_OPTION_ARG_INT, &row_limit, "Maximum number of rows to export. 0 means all rows.", "rows"},')
+
+    $mdbJsonSource = $mdbJsonSource.Replace(
+        "		fputs(row_end, outfile);`n	}",
+        "		fputs(row_end, outfile);`n`n		if (row_limit > 0 && --row_limit == 0) {`n			break;`n		}`n	}")
+
+    Set-Content -NoNewline -Path $mdbJsonPath -Value $mdbJsonSource
+}
+
 $containerCommand = @'
 set -e
 

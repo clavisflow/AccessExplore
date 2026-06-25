@@ -86,3 +86,12 @@ public sealed record CommandDiagnostic(
     string Command,
     int ElapsedMs,
     IReadOnlyList<string> Stderr);
+
+public sealed class AccessTablePreviewResult
+{
+    public List<string> Columns { get; set; } = [];
+    public List<Dictionary<string, string?>> Rows { get; set; } = [];
+    public int DisplayLimit { get; set; }
+    public bool IsTruncated { get; set; }
+    public CommandDiagnostic? Diagnostic { get; set; }
+}

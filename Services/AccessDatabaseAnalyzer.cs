@@ -9,6 +9,19 @@ public sealed partial class AccessDatabaseAnalyzer(IJSRuntime jsRuntime)
 {
     private const long MaxFileSize = 300L * 1024 * 1024;
 
+    public async Task<AccessTablePreviewResult> ReadTablePreviewAsync(string tableName, int displayLimit) =>
+        await jsRuntime.InvokeAsync<AccessTablePreviewResult>(
+            "accessDoctorMdb.readTablePreview",
+            tableName,
+            displayLimit);
+
+    public async Task DownloadTableCsvAsync(string fileName, string tableName, IReadOnlyList<string> columns) =>
+        await jsRuntime.InvokeVoidAsync(
+            "accessDoctorMdb.downloadTableCsv",
+            fileName,
+            tableName,
+            columns);
+
     public async Task<AccessDiagnosticsResult> AnalyzeAsync(IBrowserFile file)
     {
         ValidateFile(file);

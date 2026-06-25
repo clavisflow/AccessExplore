@@ -165,6 +165,68 @@
                                 </div>
                                 <em>@(table.RecordCount?.ToString("N0") ?? "未取得") 件</em>
                             </div>
+                            <div class="table-card-actions table-card-actions-row">
+                                <button type="button" class="secondary-command" disabled="@isLoadingTableData" @onclick="@(() => ToggleTablePreviewAsync(table))">
+                                    @(previewTableName == table.Name ? "実データ非表示" : "実データ表示")
+                                </button>
+                                <button type="button" class="secondary-command" disabled="@isExportingTableCsv" @onclick="@(() => DownloadTableCsvAsync(table))">CSV出力</button>
+                            </div>
+
+                            @if (previewTableName == table.Name)
+                            {
+                                <section class="table-data-preview">
+                                    <div class="table-data-preview-head">
+                                        <div>
+                                            <h3>実データプレビュー</h3>
+                                            <p>画面表示は先頭 @TablePreviewLimit.ToString("N0") 件までです。全件が必要な場合はCSV出力を使ってください。</p>
+                                        </div>
+                                        @if (tablePreview is not null)
+                                        {
+                                            <span>@tablePreview.Rows.Count.ToString("N0") 件@(tablePreview.IsTruncated ? " / 続きあり" : "")</span>
+                                        }
+                                    </div>
+
+                                    @if (isLoadingTableData)
+                                    {
+                                        <p class="preview-status">読み込み中...</p>
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(tableDataError))
+                                    {
+                                        <p class="preview-status error">@tableDataError</p>
+                                    }
+                                    else if (tablePreview is null || tablePreview.Rows.Count == 0)
+                                    {
+                                        <p class="preview-status">表示できる行がありません。</p>
+                                    }
+                                    else
+                                    {
+                                        <div class="query-table-wrap table-preview-wrap">
+                                            <table class="data-table table-preview-data">
+                                                <thead>
+                                                    <tr>
+                                                        @foreach (var columnName in PreviewColumns(table))
+                                                        {
+                                                            <th>@columnName</th>
+                                                        }
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var row in tablePreview.Rows)
+                                                    {
+                                                        <tr>
+                                                            @foreach (var columnName in PreviewColumns(table))
+                                                            {
+                                                                <td>@FormatPreviewCell(row, columnName)</td>
+                                                            }
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    }
+                                </section>
+                            }
+
                             <div class="column-grid">
                                 @foreach (var column in table.Columns)
                                 {
@@ -338,11 +400,18 @@
 </section>
 
 @code {
+    private const int TablePreviewLimit = 50;
+
     private AccessDiagnosticsResult? result;
+    private AccessTablePreviewResult? tablePreview;
     private bool isAnalyzing;
+    private bool isLoadingTableData;
+    private bool isExportingTableCsv;
     private string? errorMessage;
+    private string? tableDataError;
     private string activeTab = "overview";
     private string selectedTableName = string.Empty;
+    private string previewTableName = string.Empty;
     private string tableSort = "records";
     private string selectedQueryName = string.Empty;
     private string queryKindFilter = string.Empty;
@@ -397,9 +466,12 @@
     private async Task AnalyzeFileAsync(InputFileChangeEventArgs args)
     {
         result = null;
+        tablePreview = null;
         errorMessage = null;
+        tableDataError = null;
         activeTab = "overview";
         selectedTableName = string.Empty;
+        previewTableName = string.Empty;
         selectedQueryName = string.Empty;
         queryKindFilter = string.Empty;
         isAnalyzing = true;
@@ -431,6 +503,61 @@
         await JsRuntime.InvokeVoidAsync("accessDoctorMdb.downloadJson", fileName, result);
     }
 
+    private async Task ToggleTablePreviewAsync(AccessTableInfo table)
+    {
+        if (previewTableName == table.Name)
+        {
+            previewTableName = string.Empty;
+            tablePreview = null;
+            tableDataError = null;
+            return;
+        }
+
+        previewTableName = table.Name;
+        tablePreview = null;
+        tableDataError = null;
+        isLoadingTableData = true;
+
+        try
+        {
+            tablePreview = await Analyzer.ReadTablePreviewAsync(table.Name, TablePreviewLimit);
+        }
+        catch (Exception ex)
+        {
+            tableDataError = ex.Message;
+        }
+        finally
+        {
+            isLoadingTableData = false;
+        }
+    }
+
+    private async Task DownloadTableCsvAsync(AccessTableInfo table)
+    {
+        if (result is null)
+        {
+            return;
+        }
+
+        isExportingTableCsv = true;
+        tableDataError = null;
+
+        try
+        {
+            var fileName = $"{SafeFileName(Path.GetFileNameWithoutExtension(result.FileName))}-{SafeFileName(table.Name)}.csv";
+            await Analyzer.DownloadTableCsvAsync(fileName, table.Name, table.Columns.Select(column => column.Name).ToList());
+        }
+        catch (Exception ex)
+        {
+            previewTableName = table.Name;
+            tableDataError = ex.Message;
+        }
+        finally
+        {
+            isExportingTableCsv = false;
+        }
+    }
+
     private void SelectTab(string tab) => activeTab = tab;
 
     private void ShowTable(string tableName)
@@ -451,6 +578,37 @@
     private string SortClass(string sort) => tableSort == sort ? "active" : string.Empty;
 
     private string FileInputClass() => isAnalyzing ? "file-input disabled" : "file-input";
+
+    private IReadOnlyList<string> PreviewColumns(AccessTableInfo table)
+    {
+        var columns = table.Columns.Select(column => column.Name).ToList();
+        if (tablePreview is null)
+        {
+            return columns;
+        }
+
+        var seen = new HashSet<string>(columns, StringComparer.OrdinalIgnoreCase);
+        foreach (var column in tablePreview.Columns)
+        {
+            if (seen.Add(column))
+            {
+                columns.Add(column);
+            }
+        }
+
+        return columns;
+    }
+
+    private static string FormatPreviewCell(IReadOnlyDictionary<string, string?> row, string columnName) =>
+        row.TryGetValue(columnName, out var value) ? value ?? string.Empty : string.Empty;
+
+    private static string SafeFileName(string value)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var safeChars = value.Select(character => invalidChars.Contains(character) ? '_' : character).ToArray();
+        var safeName = new string(safeChars).Trim();
+        return string.IsNullOrWhiteSpace(safeName) ? "table" : safeName;
+    }
 
     private static string FormatBytes(long bytes)
     {

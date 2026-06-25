@@ -105,6 +105,10 @@ h1 {
     line-height: 1.15;
 }
 
+h1:focus {
+    outline: none;
+}
+
 .site-footer {
     margin-top: 32px;
     padding-top: 20px;
@@ -783,10 +787,12 @@ h1 {
 .table-list {
     display: grid;
     gap: 12px;
+    min-width: 0;
     padding: 12px;
 }
 
 .table-card {
+    min-width: 0;
     padding: 14px;
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -814,10 +820,24 @@ h1 {
     font-style: normal;
 }
 
+.table-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.table-card-actions-row {
+    justify-content: flex-start;
+    margin-bottom: 12px;
+}
+
 .column-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 6px;
+    min-width: 0;
 }
 
 .column-grid > span {
@@ -912,7 +932,72 @@ h1 {
     overflow-wrap: anywhere;
 }
 
+.table-data-preview {
+    min-width: 0;
+    max-width: 100%;
+    margin-top: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #ffffff;
+    overflow: hidden;
+}
+
+.table-data-preview-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    background: #f8fafc;
+}
+
+.table-data-preview-head h3 {
+    margin: 0 0 4px;
+    font-size: 0.98rem;
+}
+
+.table-data-preview-head p,
+.table-data-preview-head span,
+.preview-status {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.84rem;
+}
+
+.table-data-preview-head span {
+    white-space: nowrap;
+}
+
+.preview-status {
+    padding: 12px;
+}
+
+.preview-status.error {
+    color: var(--red);
+}
+
+.table-preview-wrap {
+    width: 100%;
+    max-width: 100%;
+    max-height: 420px;
+    overflow-x: auto;
+}
+
+.table-preview-data {
+    min-width: 960px;
+}
+
+.table-preview-data td {
+    max-width: 340px;
+    overflow-wrap: anywhere;
+    font-family: inherit;
+    font-size: 0.84rem;
+}
+
 .query-table-wrap {
+    min-width: 0;
+    max-width: 100%;
     overflow: auto;
     max-height: 680px;
 }
@@ -950,6 +1035,12 @@ h1 {
     color: #314050;
     font-family: Consolas, "Courier New", monospace;
     font-size: 0.86rem;
+}
+
+.table-preview-data td:nth-child(3) {
+    max-width: 340px;
+    font-family: inherit;
+    font-size: 0.84rem;
 }
 
 .sql-scroll {
