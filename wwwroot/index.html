@@ -5,11 +5,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ClavisFlow | アクセスエクスプローラー</title>
-    <meta name="description" content="Accessファイルのテーブル、レコード、クエリ、SQL、各種オブジェクト一覧をブラウザ上で瞬時に解析。Accessがなくても「これどういうAccessだっけ？」をすぐ確認できます。">
+    <meta name="description" content="Accessファイルのテーブル、レコード件数、クエリSQL、各種オブジェクト一覧をブラウザ上で瞬時に解析。Accessがなくても「これはどんなAccessだったか」をすぐ確認できます。" />
+    <meta name="robots" content="index,follow" />
     <meta property="og:title" content="ClavisFlow | アクセスエクスプローラー">
-    <meta property="og:description"
-          content="Accessファイルのテーブル、レコード、クエリ、SQL、各種オブジェクト一覧をブラウザ上で瞬時に解析。Accessがなくても「これどういうAccessだっけ？」をすぐ確認できます。">
+    <meta property="og:description" content="Accessファイルのテーブル、レコード件数、クエリSQL、各種オブジェクト一覧をブラウザ上で瞬時に解析。Accessがなくても内容を確認できます。">
     <meta property="og:type" content="website">
+    <meta property="og:locale" content="ja_JP">
     <meta property="og:url" content="https://accessexplore.clavisflow.net/">
     <link rel="canonical" href="https://accessexplore.clavisflow.net/" />
     <base href="/" />
@@ -31,8 +32,8 @@
                     </a>
                     <h1>Access不要の確認アプリ「アクセスエクスプローラー」</h1>
                     <p class="lead-copy">
-                        Accessファイルのテーブル、レコード、クエリ、SQL、各種オブジェクト一覧をブラウザ上で瞬時に解析。
-                        Accessがなくても「これどういうAccessだっけ？」をすぐ確認できます。
+                        Accessファイルのテーブル、レコード件数、クエリSQL、フォーム、レポート、マクロ、モジュール、
+                        リレーション、リンクテーブルをブラウザ上で確認できます。
                     </p>
                 </div>
             </div>
@@ -40,13 +41,13 @@
             <section class="seo-panel">
                 <h2>Accessファイルの構造をブラウザだけで確認</h2>
                 <p>
-                    .accdb / .mdb ファイルをローカルのブラウザ上で読み込み、テーブル一覧、列定義、レコード件数、
-                    クエリSQL、フォーム、レポート、マクロ、モジュール、リレーション、リンクテーブルを確認できます。
+                    .accdb / .mdb ファイルをローカルのブラウザ上で読み込み、テーブル一覧、定義、レコード件数、クエリSQL、
+                    フォーム、レポート、マクロ、モジュール、リレーション、リンクテーブルを確認できます。
                 </p>
                 <ul>
                     <li>ファイルはサーバーへ送信せず、ブラウザ内で解析します。</li>
                     <li>分析結果はJSONまたは仕様書風HTMLレポートとして出力できます。</li>
-                    <li>テーブルの実データは先頭50件だけプレビューし、全件はCSVで出力できます。</li>
+                    <li>テーブルの実データは先頭50件だけをプレビューし、全件はCSVで出力できます。</li>
                 </ul>
                 <p class="seo-app-note">通常のブラウザでは、この後に解析アプリ本体が読み込まれます。</p>
             </section>
@@ -56,7 +57,7 @@
     <div id="blazor-error-ui">
         An unhandled error has occurred.
         <a href="." class="reload">Reload</a>
-        <span class="dismiss">🗙</span>
+        <span class="dismiss">x</span>
     </div>
     <script>
         (() => {
