@@ -22,17 +22,24 @@ public sealed partial class AccessDatabaseAnalyzer(IJSRuntime jsRuntime)
             memory.ToArray(),
             new { maxQuerySql = 30, largeFileQuerySql = 5, largeFileBytes = 100 * 1024 * 1024 });
 
-        var parsedTables = ParseSchema(raw.Schema);
+        var parsedSchema = ParseSchema(raw.Schema);
         var counts = raw.TableCounts.ToDictionary(
             item => item.TableName,
             item => ParseCount(item.Count),
             StringComparer.OrdinalIgnoreCase);
 
         var tables = raw.Tables
-            .Select(name => new AccessTableInfo(
-                name,
-                parsedTables.TryGetValue(name, out var columns) ? columns : [],
-                counts.GetValueOrDefault(name)))
+            .Select(name =>
+            {
+                parsedSchema.Tables.TryGetValue(name, out var tableDetail);
+                return new AccessTableInfo(
+                    name,
+                    tableDetail?.Columns ?? [],
+                    counts.GetValueOrDefault(name),
+                    tableDetail?.Indexes ?? [],
+                    tableDetail?.Constraints ?? [],
+                    tableDetail?.Relationships ?? []);
+            })
             .ToList();
 
         var sqlByQuery = raw.QuerySql
@@ -80,6 +87,7 @@ public sealed partial class AccessDatabaseAnalyzer(IJSRuntime jsRuntime)
             Tables = tables,
             Queries = queries,
             Objects = objects,
+            Relationships = parsedSchema.Relationships,
             SchemaText = raw.Schema,
             CommandDiagnostics = raw.CommandDiagnostics
                 .Select(item => new CommandDiagnostic(item.Command, item.ElapsedMs, item.Stderr))
@@ -102,49 +110,225 @@ public sealed partial class AccessDatabaseAnalyzer(IJSRuntime jsRuntime)
         }
     }
 
-    private static Dictionary<string, IReadOnlyList<AccessColumnInfo>> ParseSchema(string schemaText)
+    private static ParsedSchema ParseSchema(string schemaText)
     {
-        var tables = new Dictionary<string, IReadOnlyList<AccessColumnInfo>>(StringComparer.OrdinalIgnoreCase);
+        var tables = new Dictionary<string, ParsedTable>(StringComparer.OrdinalIgnoreCase);
+        var relationships = new List<AccessRelationshipInfo>();
         string? currentTable = null;
-        var columns = new List<AccessColumnInfo>();
 
         foreach (var rawLine in schemaText.Split('\n'))
         {
             var line = rawLine.Trim();
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
             var tableMatch = CreateTableRegex().Match(line);
             if (tableMatch.Success)
             {
                 currentTable = tableMatch.Groups["name"].Value;
-                columns = [];
+                EnsureTable(tables, currentTable);
                 continue;
             }
 
-            if (currentTable is not null && line == ");")
+            if (currentTable is not null)
             {
-                tables[currentTable] = columns;
-                currentTable = null;
-                columns = [];
+                if (line == ");")
+                {
+                    currentTable = null;
+                    continue;
+                }
+
+                if (line == "(")
+                {
+                    continue;
+                }
+
+                var table = EnsureTable(tables, currentTable);
+                var statement = line.TrimEnd(',');
+
+                var inlineConstraintMatch = InlineConstraintRegex().Match(statement);
+                if (inlineConstraintMatch.Success)
+                {
+                    var definition = inlineConstraintMatch.Groups["definition"].Value.Trim();
+                    table.Constraints.Add(new AccessTableConstraintInfo(
+                        inlineConstraintMatch.Groups["name"].Value,
+                        DetectConstraintKind(definition),
+                        definition));
+                    continue;
+                }
+
+                var column = ParseColumn(statement);
+                if (column is not null)
+                {
+                    table.Columns.Add(column);
+                }
+
                 continue;
             }
 
-            if (currentTable is null || string.IsNullOrWhiteSpace(line) || line == "(")
+            var indexMatch = CreateIndexRegex().Match(line);
+            if (indexMatch.Success)
+            {
+                var table = EnsureTable(tables, indexMatch.Groups["table"].Value);
+                var indexName = indexMatch.Groups["name"].Value;
+                var columns = ParseIdentifierList(indexMatch.Groups["columns"].Value);
+                var isUnique = !string.IsNullOrWhiteSpace(indexMatch.Groups["unique"].Value);
+                table.Indexes.Add(new AccessIndexInfo(
+                    indexName,
+                    columns,
+                    isUnique,
+                    indexName.Contains("primary", StringComparison.OrdinalIgnoreCase)));
+                continue;
+            }
+
+            var alterConstraintMatch = AlterTableConstraintRegex().Match(line);
+            if (!alterConstraintMatch.Success)
             {
                 continue;
             }
 
-            var columnMatch = ColumnRegex().Match(line.TrimEnd(','));
-            if (!columnMatch.Success)
+            var tableName = alterConstraintMatch.Groups["table"].Value;
+            var constraintName = alterConstraintMatch.Groups["name"].Value;
+            var constraintDefinition = alterConstraintMatch.Groups["definition"].Value.Trim();
+
+            var foreignKeyMatch = ForeignKeyRegex().Match(constraintDefinition);
+            if (foreignKeyMatch.Success)
             {
+                var primaryTable = foreignKeyMatch.Groups["primaryTable"].Value;
+                var relation = new AccessRelationshipInfo(
+                    constraintName,
+                    primaryTable,
+                    ParseIdentifierList(foreignKeyMatch.Groups["primaryColumns"].Value),
+                    tableName,
+                    ParseIdentifierList(foreignKeyMatch.Groups["foreignColumns"].Value),
+                    foreignKeyMatch.Groups["options"].Value.Contains("ON UPDATE CASCADE", StringComparison.OrdinalIgnoreCase),
+                    foreignKeyMatch.Groups["options"].Value.Contains("ON DELETE CASCADE", StringComparison.OrdinalIgnoreCase));
+
+                relationships.Add(relation);
+                EnsureTable(tables, tableName).Relationships.Add(relation);
+                EnsureTable(tables, primaryTable).Relationships.Add(relation);
+                EnsureTable(tables, tableName).Constraints.Add(new AccessTableConstraintInfo(
+                    constraintName,
+                    "FOREIGN KEY",
+                    constraintDefinition));
                 continue;
             }
 
-            columns.Add(new AccessColumnInfo(
-                columnMatch.Groups["name"].Value,
-                columnMatch.Groups["type"].Value.Trim(),
-                int.TryParse(columnMatch.Groups["size"].Value, out var size) ? size : null));
+            EnsureTable(tables, tableName).Constraints.Add(new AccessTableConstraintInfo(
+                constraintName,
+                DetectConstraintKind(constraintDefinition),
+                constraintDefinition));
         }
 
-        return tables;
+        return new ParsedSchema(
+            tables.ToDictionary(
+                pair => pair.Key,
+                pair => new ParsedTableResult(
+                    pair.Value.Columns,
+                    pair.Value.Indexes,
+                    pair.Value.Constraints,
+                    pair.Value.Relationships),
+                StringComparer.OrdinalIgnoreCase),
+            relationships);
+    }
+
+    private static ParsedTable EnsureTable(IDictionary<string, ParsedTable> tables, string tableName)
+    {
+        if (tables.TryGetValue(tableName, out var table))
+        {
+            return table;
+        }
+
+        table = new ParsedTable();
+        tables[tableName] = table;
+        return table;
+    }
+
+    private static AccessColumnInfo? ParseColumn(string statement)
+    {
+        var columnMatch = ColumnDefinitionRegex().Match(statement);
+        if (!columnMatch.Success)
+        {
+            return null;
+        }
+
+        var definition = columnMatch.Groups["definition"].Value.Trim();
+        var typePart = TrimColumnConstraintTail(definition);
+        var sizeMatch = TypeSizeRegex().Match(typePart);
+        int? size = sizeMatch.Success && int.TryParse(sizeMatch.Groups["size"].Value, out var parsedSize)
+            ? parsedSize
+            : null;
+        var dataType = TypeSizeRegex().Replace(typePart, string.Empty).Trim();
+
+        return new AccessColumnInfo(
+            columnMatch.Groups["name"].Value,
+            string.IsNullOrWhiteSpace(dataType) ? typePart : dataType,
+            size,
+            definition.Contains("NOT NULL", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string TrimColumnConstraintTail(string definition)
+    {
+        string[] markers =
+        [
+            " NOT NULL",
+            " NULL",
+            " DEFAULT ",
+            " CONSTRAINT ",
+            " PRIMARY KEY",
+            " REFERENCES ",
+            " CHECK "
+        ];
+
+        var cutIndex = definition.Length;
+        foreach (var marker in markers)
+        {
+            var index = definition.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (index >= 0 && index < cutIndex)
+            {
+                cutIndex = index;
+            }
+        }
+
+        return definition[..cutIndex].Trim();
+    }
+
+    private static IReadOnlyList<string> ParseIdentifierList(string source)
+    {
+        return source
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(part => SortSuffixRegex().Replace(part.Trim(), string.Empty).Trim())
+            .Select(part => part.Trim('[', ']', '"'))
+            .Where(part => !string.IsNullOrWhiteSpace(part))
+            .ToList();
+    }
+
+    private static string DetectConstraintKind(string definition)
+    {
+        var normalized = definition.TrimStart();
+        if (normalized.StartsWith("PRIMARY KEY", StringComparison.OrdinalIgnoreCase))
+        {
+            return "PRIMARY KEY";
+        }
+
+        if (normalized.StartsWith("FOREIGN KEY", StringComparison.OrdinalIgnoreCase))
+        {
+            return "FOREIGN KEY";
+        }
+
+        if (normalized.StartsWith("UNIQUE", StringComparison.OrdinalIgnoreCase))
+        {
+            return "UNIQUE";
+        }
+
+        if (normalized.StartsWith("CHECK", StringComparison.OrdinalIgnoreCase))
+        {
+            return "CHECK";
+        }
+
+        return "CONSTRAINT";
     }
 
     private static long? ParseCount(string? value) =>
@@ -198,11 +382,47 @@ public sealed partial class AccessDatabaseAnalyzer(IJSRuntime jsRuntime)
         };
     }
 
-    [GeneratedRegex(@"^CREATE TABLE \[(?<name>.+)\]$")]
+    [GeneratedRegex(@"^CREATE TABLE \[(?<name>.+)\]$", RegexOptions.IgnoreCase)]
     private static partial Regex CreateTableRegex();
 
-    [GeneratedRegex(@"^\[(?<name>.+)\]\s+(?<type>.+?)(?:\s+\((?<size>\d+)\))?$")]
-    private static partial Regex ColumnRegex();
+    [GeneratedRegex(@"^\[(?<name>.+?)\]\s+(?<definition>.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex ColumnDefinitionRegex();
+
+    [GeneratedRegex(@"\((?<size>\d+)\)", RegexOptions.IgnoreCase)]
+    private static partial Regex TypeSizeRegex();
+
+    [GeneratedRegex(@"^CONSTRAINT\s+\[(?<name>.+?)\]\s+(?<definition>.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex InlineConstraintRegex();
+
+    [GeneratedRegex(@"^CREATE\s+(?<unique>UNIQUE\s+)?INDEX\s+\[(?<name>.+?)\]\s+ON\s+\[(?<table>.+?)\]\s*\((?<columns>.+)\)$", RegexOptions.IgnoreCase)]
+    private static partial Regex CreateIndexRegex();
+
+    [GeneratedRegex(@"^ALTER\s+TABLE\s+\[(?<table>.+?)\]\s+ADD\s+CONSTRAINT\s+\[(?<name>.+?)\]\s+(?<definition>.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex AlterTableConstraintRegex();
+
+    [GeneratedRegex(@"^FOREIGN\s+KEY\s*\((?<foreignColumns>.+?)\)\s+REFERENCES\s+\[(?<primaryTable>.+?)\]\s*\((?<primaryColumns>.+?)\)(?<options>.*)$", RegexOptions.IgnoreCase)]
+    private static partial Regex ForeignKeyRegex();
+
+    [GeneratedRegex(@"\s+(ASC|DESC)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex SortSuffixRegex();
+
+    private sealed class ParsedTable
+    {
+        public List<AccessColumnInfo> Columns { get; } = [];
+        public List<AccessIndexInfo> Indexes { get; } = [];
+        public List<AccessTableConstraintInfo> Constraints { get; } = [];
+        public List<AccessRelationshipInfo> Relationships { get; } = [];
+    }
+
+    private sealed record ParsedTableResult(
+        IReadOnlyList<AccessColumnInfo> Columns,
+        IReadOnlyList<AccessIndexInfo> Indexes,
+        IReadOnlyList<AccessTableConstraintInfo> Constraints,
+        IReadOnlyList<AccessRelationshipInfo> Relationships);
+
+    private sealed record ParsedSchema(
+        IReadOnlyDictionary<string, ParsedTableResult> Tables,
+        IReadOnlyList<AccessRelationshipInfo> Relationships);
 }
 
 public sealed class RawAccessAnalysis

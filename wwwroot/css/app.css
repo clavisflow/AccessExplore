@@ -812,17 +812,21 @@ h1 {
     gap: 6px;
 }
 
-.column-grid span {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+.column-grid > span {
+    display: block;
     min-width: 0;
     min-height: 30px;
-    padding: 4px 8px;
+    padding: 6px 8px;
     border: 1px solid #e3e8ef;
     border-radius: 8px;
     background: #f9fbfd;
+}
+
+.column-name-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
 }
 
 .column-grid b,
@@ -839,14 +843,65 @@ h1 {
     font-size: 0.84rem;
 }
 
+.constraint-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 18px;
+    padding: 0 6px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-style: normal;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.constraint-badge.not-null {
+    border: 1px solid #b45309;
+    background: #fffbeb;
+    color: #92400e;
+}
+
 .column-grid small,
 .muted {
     color: var(--muted);
 }
 
 .column-grid small {
-    flex: 0 0 auto;
+    margin-top: 2px;
     font-size: 0.76rem;
+}
+
+.table-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.table-meta-card {
+    padding: 10px;
+    border: 1px solid #e3e8ef;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.table-meta-card h4 {
+    margin: 0 0 8px;
+    font-size: 0.82rem;
+}
+
+.table-meta-card ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.table-meta-card li {
+    margin-bottom: 4px;
+    font-size: 0.78rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
 }
 
 .query-table-wrap {
@@ -1058,7 +1113,8 @@ h1 {
     .metric-grid,
     .summary-strip,
     .overview-grid,
-    .object-grid {
+    .object-grid,
+    .table-meta-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
@@ -1083,7 +1139,8 @@ h1 {
     .summary-strip,
     .overview-grid,
     .object-grid,
-    .column-grid {
+    .column-grid,
+    .table-meta-grid {
         grid-template-columns: 1fr;
     }
 

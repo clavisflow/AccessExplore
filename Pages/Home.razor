@@ -168,9 +168,74 @@
                             <div class="column-grid">
                                 @foreach (var column in table.Columns)
                                 {
-                                    <span title="@column.Name"><b>@column.Name</b><small>@ColumnType(column)</small></span>
+                                    <span title="@column.Name">
+                                        <span class="column-name-line">
+                                            @if (column.IsNotNull)
+                                            {
+                                                <em class="constraint-badge not-null">NN</em>
+                                            }
+                                            <b>@column.Name</b>
+                                        </span>
+                                        <small>@ColumnType(column)</small>
+                                    </span>
                                 }
                             </div>
+
+                            @if (table.Indexes.Count > 0 || table.Constraints.Count > 0 || table.Relationships.Count > 0)
+                            {
+                                <div class="table-meta-grid">
+                                    <section class="table-meta-card">
+                                        <h4>インデックス</h4>
+                                        @if (table.Indexes.Count == 0)
+                                        {
+                                            <p class="muted">なし</p>
+                                        }
+                                        else
+                                        {
+                                            <ul>
+                                                @foreach (var index in table.Indexes)
+                                                {
+                                                    <li>@FormatIndex(index)</li>
+                                                }
+                                            </ul>
+                                        }
+                                    </section>
+
+                                    <section class="table-meta-card">
+                                        <h4>制約</h4>
+                                        @if (table.Constraints.Count == 0)
+                                        {
+                                            <p class="muted">なし</p>
+                                        }
+                                        else
+                                        {
+                                            <ul>
+                                                @foreach (var constraint in table.Constraints)
+                                                {
+                                                    <li>@FormatConstraint(constraint)</li>
+                                                }
+                                            </ul>
+                                        }
+                                    </section>
+
+                                    <section class="table-meta-card">
+                                        <h4>リレーション</h4>
+                                        @if (table.Relationships.Count == 0)
+                                        {
+                                            <p class="muted">なし</p>
+                                        }
+                                        else
+                                        {
+                                            <ul>
+                                                @foreach (var relation in table.Relationships)
+                                                {
+                                                    <li>@FormatRelationship(table.Name, relation)</li>
+                                                }
+                                            </ul>
+                                        }
+                                    </section>
+                                </div>
+                            }
                         </article>
                     }
                 </div>
@@ -390,4 +455,47 @@
 
     private static string ColumnType(AccessColumnInfo column) =>
         column.Size is null ? column.DataType : $"{column.DataType}({column.Size})";
+
+    private static string FormatIndex(AccessIndexInfo index)
+    {
+        var tags = new List<string>();
+        if (index.IsPrimaryKey)
+        {
+            tags.Add("PK");
+        }
+
+        if (index.IsUnique)
+        {
+            tags.Add("UNIQUE");
+        }
+
+        var prefix = tags.Count == 0 ? string.Empty : $"[{string.Join("/", tags)}] ";
+        return $"{prefix}{index.Name} ({string.Join(", ", index.Columns)})";
+    }
+
+    private static string FormatConstraint(AccessTableConstraintInfo constraint) =>
+        $"{constraint.Kind}: {constraint.Name} ({constraint.Definition})";
+
+    private static string FormatRelationship(string tableName, AccessRelationshipInfo relation)
+    {
+        var optionFlags = new List<string>();
+        if (relation.CascadeUpdate)
+        {
+            optionFlags.Add("更新CASCADE");
+        }
+
+        if (relation.CascadeDelete)
+        {
+            optionFlags.Add("削除CASCADE");
+        }
+
+        var options = optionFlags.Count > 0 ? $" [{string.Join("/", optionFlags)}]" : string.Empty;
+
+        if (tableName.Equals(relation.ForeignTable, StringComparison.OrdinalIgnoreCase))
+        {
+            return $"{relation.Name}: ({string.Join(", ", relation.ForeignColumns)}) -> {relation.PrimaryTable} ({string.Join(", ", relation.PrimaryColumns)}){options}";
+        }
+
+        return $"{relation.Name}: {relation.ForeignTable} ({string.Join(", ", relation.ForeignColumns)}) -> ({string.Join(", ", relation.PrimaryColumns)}){options}";
+    }
 }

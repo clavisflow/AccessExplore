@@ -9,6 +9,7 @@ public sealed record AccessDiagnosticsResult
     public required IReadOnlyList<AccessTableInfo> Tables { get; init; }
     public required IReadOnlyList<AccessQueryInfo> Queries { get; init; }
     public required AccessObjectInventory Objects { get; init; }
+    public required IReadOnlyList<AccessRelationshipInfo> Relationships { get; init; }
     public required string SchemaText { get; init; }
     public required IReadOnlyList<CommandDiagnostic> CommandDiagnostics { get; init; }
 }
@@ -28,12 +29,36 @@ public sealed record AccessObjectSummary(
 public sealed record AccessTableInfo(
     string Name,
     IReadOnlyList<AccessColumnInfo> Columns,
-    long? RecordCount);
+    long? RecordCount,
+    IReadOnlyList<AccessIndexInfo> Indexes,
+    IReadOnlyList<AccessTableConstraintInfo> Constraints,
+    IReadOnlyList<AccessRelationshipInfo> Relationships);
 
 public sealed record AccessColumnInfo(
     string Name,
     string DataType,
-    int? Size);
+    int? Size,
+    bool IsNotNull);
+
+public sealed record AccessIndexInfo(
+    string Name,
+    IReadOnlyList<string> Columns,
+    bool IsUnique,
+    bool IsPrimaryKey);
+
+public sealed record AccessTableConstraintInfo(
+    string Name,
+    string Kind,
+    string Definition);
+
+public sealed record AccessRelationshipInfo(
+    string Name,
+    string PrimaryTable,
+    IReadOnlyList<string> PrimaryColumns,
+    string ForeignTable,
+    IReadOnlyList<string> ForeignColumns,
+    bool CascadeUpdate,
+    bool CascadeDelete);
 
 public sealed record AccessQueryInfo(
     string Name,

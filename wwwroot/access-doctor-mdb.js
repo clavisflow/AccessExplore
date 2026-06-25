@@ -105,6 +105,15 @@
             .filter(Boolean);
     }
 
+    function hasSystemTablePermissionError(stderrLines) {
+        const text = stderrLines.join("\n").toLowerCase();
+        return text.includes("permission")
+            || text.includes("access is denied")
+            || text.includes("not authorized")
+            || text.includes("could not open table")
+            || text.includes("msysobjects");
+    }
+
     window.accessDoctorMdb = {
         async analyzeAccessFile(fileBytes, options) {
             const bytes = toUint8Array(fileBytes);
@@ -134,7 +143,9 @@
             let objectDetails = [];
             const objectCatalogResult = await runCommand("mdb-json", bytes, ["{file}", "MSysObjects"]);
             diagnostics.push(objectCatalogResult);
-            objectDetails = parseObjectCatalog(objectCatalogResult.stdout);
+            if (!hasSystemTablePermissionError(objectCatalogResult.stderr)) {
+                objectDetails = parseObjectCatalog(objectCatalogResult.stdout);
+            }
 
             const schemaResult = await runCommand("mdb-schema", bytes, []);
             diagnostics.push(schemaResult);
