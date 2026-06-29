@@ -2,6 +2,7 @@ param(
     [string]$SourceDir = ".spike\mdbtools",
     [string]$OutDir = ".spike\wasm-artifacts",
     [string]$MdbToolsRepository = "https://github.com/mdbtools/mdbtools.git",
+    [string]$MdbToolsCommit = "cc4aa5d953900073d3ba99cf6a3739721e37831f",
     [string]$EmscriptenImage = "emscripten/emsdk:latest"
 )
 
@@ -14,7 +15,12 @@ New-Item -ItemType Directory -Force (Split-Path $sourcePath -Parent) | Out-Null
 New-Item -ItemType Directory -Force $outPath | Out-Null
 
 if (-not (Test-Path $sourcePath)) {
-    git -c core.autocrlf=false clone --depth 1 $MdbToolsRepository $sourcePath
+    git -c core.autocrlf=false clone $MdbToolsRepository $sourcePath
+}
+
+if (-not [string]::IsNullOrWhiteSpace($MdbToolsCommit)) {
+    git -C $sourcePath fetch origin $MdbToolsCommit
+    git -C $sourcePath checkout $MdbToolsCommit
 }
 
 $mdbJsonPath = Join-Path $sourcePath "src\util\mdb-json.c"

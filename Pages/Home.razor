@@ -28,7 +28,7 @@
                 <p>🔒ファイルはサーバーに送信されず、すべての解析をブラウザ上で安全に行います。</p>
             </div>
         </div>
-        <InputFile id="accessFile" class="@FileInputClass()" OnChange="AnalyzeFileAsync" accept=".accdb,.mdb" />
+        <InputFile @key="fileInputVersion" id="accessFile" class="@FileInputClass()" OnChange="AnalyzeFileAsync" accept=".accdb,.mdb" />
 
         @if (isAnalyzing)
         {
@@ -417,6 +417,7 @@
     private string tableSort = "records";
     private string selectedQueryName = string.Empty;
     private string queryKindFilter = string.Empty;
+    private int fileInputVersion;
 
     private int ObjectTotal => result is null
         ? 0
@@ -491,6 +492,7 @@
         finally
         {
             isAnalyzing = false;
+            fileInputVersion++;
         }
     }
 
